@@ -145,66 +145,73 @@ def is_chrome_running() -> bool:
 
 
 def build_driver(headless: bool, profile: str = "Default", user_data_dir: Optional[str] = None, debug_port: int = CHROME_DEBUG_PORT) -> webdriver.Chrome:
+    import time
+    
     options = ChromeOptions()
-    binary = detect_browser_binary()
-    if not binary:
-        raise FileNotFoundError(
-            f"Chrome browser not found on this machine ({platform.system()}). "
-            "Please install Google Chrome or update the path in detect_browser_binary()."
-        )
-    options.binary_location = binary
-    LOGGER.info("Using Chrome browser at: %s", binary)
-
+    
     # Use custom user data dir if provided
     actual_user_data_dir = Path(user_data_dir) if user_data_dir else CHROME_USER_DATA_DIR
+    
     LOGGER.info("=" * 60)
     LOGGER.info("Chrome Configuration:")
     LOGGER.info("  User data directory: %s", actual_user_data_dir)
     LOGGER.info("  Profile directory: %s", profile)
-    LOGGER.info("  Full profile path: %s", actual_user_data_dir / profile)
-    LOGGER.info("  Profile exists: %s", (actual_user_data_dir / profile).exists())
+    LOGGER.info("  Debug port: %s", debug_port)
     LOGGER.info("=" * 60)
 
+    # Check if Chrome is running with debug port
     if is_port_open(CHROME_DEBUG_HOST, debug_port):
+        LOGGER.info("Found Chrome running on debug port %s", debug_port)
+        LOGGER.info("Attaching to existing Chrome instance...")
         options.debugger_address = f"{CHROME_DEBUG_HOST}:{debug_port}"
-        LOGGER.info(
-            "Attaching to existing Chrome at %s:%s",
-            CHROME_DEBUG_HOST,
-            debug_port,
-        )
-        LOGGER.info("NOTE: When attaching, profile settings are ignored (using existing session)")
-    else:
-        # Check if Chrome is running with the same profile
-        if is_chrome_running():
-            LOGGER.warning(
-                "Chrome appears to be running. If you want to use the existing Chrome instance, "
-                "start Chrome with: --remote-debugging-port=%d", debug_port
-            )
-            LOGGER.info("Attempting to start new instance anyway...")
         
+        # Don't set binary location when attaching
+        LOGGER.info("NOTE: Using existing Chrome session (profile settings ignored)")
+    else:
+        LOGGER.info("No Chrome instance found on debug port %s", debug_port)
         LOGGER.info("Starting new Chrome instance...")
+        
+        # Detect and set Chrome binary
+        binary = detect_browser_binary()
+        if not binary:
+            raise FileNotFoundError(
+                f"Chrome browser not found on this machine ({platform.system()}). "
+                "Please install Google Chrome."
+            )
+        options.binary_location = binary
+        LOGGER.info("Chrome binary: %s", binary)
         
         # Ensure user data directory exists
         if not actual_user_data_dir.exists():
             LOGGER.error("User data directory does not exist: %s", actual_user_data_dir)
-            LOGGER.error("Please check the path or use --list-profiles to see available profiles")
             raise FileNotFoundError(f"User data directory not found: {actual_user_data_dir}")
         
         # Check if profile exists
         profile_path = actual_user_data_dir / profile
-        if not profile_path.exists():
-            LOGGER.warning("Profile directory does not exist: %s", profile_path)
-            LOGGER.warning("Chrome will create a new profile with this name")
-            LOGGER.warning("Use --list-profiles to see available profiles")
+        if profile_path.exists():
+            LOGGER.info("Profile exists: %s", profile_path)
+        else:
+            LOGGER.warning("Profile does not exist, Chrome will create it: %s", profile_path)
         
+        # Set Chrome arguments
         options.add_argument(f"--user-data-dir={actual_user_data_dir}")
         options.add_argument(f"--profile-directory={profile}")
-        LOGGER.info("Chrome arguments:")
+        options.add_argument(f"--remote-debugging-port={debug_port}")
+        
+        LOGGER.info("Chrome will start with:")
         LOGGER.info("  --user-data-dir=%s", actual_user_data_dir)
         LOGGER.info("  --profile-directory=%s", profile)
+        LOGGER.info("  --remote-debugging-port=%s", debug_port)
 
+    # Common options
     options.add_argument("--start-maximized")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
+    
+    # Disable automation flags
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
     
     # Windows-specific options
     if platform.system() == "Windows":
@@ -215,8 +222,50 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
         options.add_argument("--headless=new")
         options.add_argument("--window-size=1400,1400")
 
-    service = Service()
-    return webdriver.Chrome(service=service, options=options)
+    LOGGER.info("Creating Chrome driver...")
+    try:
+        service = Service()
+        driver = webdriver.Chrome(service=service, options=options)
+        LOGGER.info("Chrome driver created successfully!")
+        
+        # Wait a bit for Chrome to fully initialize
+        time.sleep(2)
+        
+        # Test if we can control Chrome
+        try:
+            current_url = driver.current_url
+            LOGGER.info("Successfully connected to Chrome. Current URL: %s", current_url)
+        except Exception as e:
+            LOGGER.warning("Connected but cannot get current URL: %s", e)
+        
+        return driver
+        
+    except Exception as e:
+        LOGGER.error("Failed to create Chrome driver: %s", e)
+        LOGGER.error("Error type: %s", type(e).__name__)
+        
+        # Provide helpful error messages
+        if "chrome not reachable" in str(e).lower():
+            LOGGER.error("")
+            LOGGER.error("Chrome is not reachable. Possible causes:")
+            LOGGER.error("1. Chrome crashed or was closed")
+            LOGGER.error("2. Chrome is not running with --remote-debugging-port=%s", debug_port)
+            LOGGER.error("3. Another process is using port %s", debug_port)
+            LOGGER.error("")
+            LOGGER.error("Try:")
+            LOGGER.error("1. Close all Chrome instances")
+            LOGGER.error("2. Run: START_HERE.bat")
+        elif "session not created" in str(e).lower():
+            LOGGER.error("")
+            LOGGER.error("Session not created. Possible causes:")
+            LOGGER.error("1. ChromeDriver version mismatch with Chrome")
+            LOGGER.error("2. Chrome binary not found")
+            LOGGER.error("")
+            LOGGER.error("Try:")
+            LOGGER.error("1. Update Chrome to latest version")
+            LOGGER.error("2. Update selenium: pip install --upgrade selenium")
+        
+        raise
 
 
 def list_brave_profiles(user_data_dir: Path) -> None:
