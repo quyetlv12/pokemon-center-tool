@@ -28,6 +28,7 @@ if SYSTEM == "Darwin":  # macOS
         Path.home() / "Library/Application Support/BraveSoftware/Brave-Browser"
     )
 elif SYSTEM == "Windows":
+    # Windows: Use the actual User Data directory (not "User Data" subfolder)
     BRAVE_USER_DATA_DIR = (
         Path.home() / "AppData/Local/BraveSoftware/Brave-Browser/User Data"
     )
@@ -64,6 +65,22 @@ def parse_args() -> argparse.Namespace:
         "--headless",
         action="store_true",
         help="Run Chrome in headless mode.",
+    )
+    parser.add_argument(
+        "--profile",
+        default="Default",
+        help="Brave profile directory name. Default: Default",
+    )
+    parser.add_argument(
+        "--user-data-dir",
+        default=None,
+        help="Custom user data directory path. If not specified, uses system default.",
+    )
+    parser.add_argument(
+        "--debug-port",
+        type=int,
+        default=BRAVE_DEBUG_PORT,
+        help=f"Remote debugging port. Default: {BRAVE_DEBUG_PORT}",
     )
     return parser.parse_args()
 
@@ -119,7 +136,7 @@ def is_brave_running() -> bool:
         return lock_file.exists()
 
 
-def build_driver(headless: bool) -> webdriver.Chrome:
+def build_driver(headless: bool, profile: str = "Default", user_data_dir: Optional[str] = None, debug_port: int = BRAVE_DEBUG_PORT) -> webdriver.Chrome:
     options = ChromeOptions()
     binary = detect_browser_binary()
     if not binary:
@@ -130,23 +147,30 @@ def build_driver(headless: bool) -> webdriver.Chrome:
     options.binary_location = binary
     LOGGER.info("Using Brave browser at: %s", binary)
 
-    if is_port_open(BRAVE_DEBUG_HOST, BRAVE_DEBUG_PORT):
-        options.debugger_address = f"{BRAVE_DEBUG_HOST}:{BRAVE_DEBUG_PORT}"
+    # Use custom user data dir if provided
+    actual_user_data_dir = Path(user_data_dir) if user_data_dir else BRAVE_USER_DATA_DIR
+    LOGGER.info("User data directory: %s", actual_user_data_dir)
+    LOGGER.info("Profile directory: %s", profile)
+
+    if is_port_open(BRAVE_DEBUG_HOST, debug_port):
+        options.debugger_address = f"{BRAVE_DEBUG_HOST}:{debug_port}"
         LOGGER.info(
             "Attaching to existing Brave at %s:%s",
             BRAVE_DEBUG_HOST,
-            BRAVE_DEBUG_PORT,
+            debug_port,
         )
     else:
+        # Check if Brave is running with the same profile
         if is_brave_running():
-            raise RuntimeError(
-                "Brave main profile is already running and locked. "
-                "Either quit Brave completely, or start it with "
-                "--remote-debugging-port=9222 so Selenium can attach to it."
+            LOGGER.warning(
+                "Brave appears to be running. If you want to use the existing Brave instance, "
+                "start Brave with: --remote-debugging-port=%d", debug_port
             )
-        LOGGER.info("Starting new Brave instance with user data dir: %s", BRAVE_USER_DATA_DIR)
-        options.add_argument(f"--user-data-dir={BRAVE_USER_DATA_DIR}")
-        options.add_argument(f"--profile-directory={BRAVE_PROFILE_DIRECTORY}")
+            LOGGER.info("Attempting to start new instance anyway...")
+        
+        LOGGER.info("Starting new Brave instance with user data dir: %s", actual_user_data_dir)
+        options.add_argument(f"--user-data-dir={actual_user_data_dir}")
+        options.add_argument(f"--profile-directory={profile}")
 
     options.add_argument("--start-maximized")
     options.add_argument("--disable-dev-shm-usage")
@@ -467,7 +491,12 @@ def main() -> int:
     driver: Optional[webdriver.Chrome] = None
 
     try:
-        driver = build_driver(args.headless)
+        driver = build_driver(
+            args.headless, 
+            args.profile, 
+            args.user_data_dir,
+            args.debug_port
+        )
         LOGGER.info("Opening %s", args.url)
         driver.get(args.url)
         target_link = find_target_slide_link(driver)
