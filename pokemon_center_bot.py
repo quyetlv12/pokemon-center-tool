@@ -16,6 +16,12 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 
+try:
+    from webdriver_manager.chrome import ChromeDriverManager
+    HAS_WEBDRIVER_MANAGER = True
+except ImportError:
+    HAS_WEBDRIVER_MANAGER = False
+
 
 LOGGER = logging.getLogger("pokemon_center_bot")
 DEFAULT_BASE_URL = "https://www.pokemoncenter-online.com"
@@ -271,8 +277,22 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
         options.add_argument("--window-size=1400,1400")
 
     LOGGER.info("Creating Chrome driver...")
+    
+    # Create service with proper ChromeDriver
     try:
+        if HAS_WEBDRIVER_MANAGER:
+            LOGGER.info("Using webdriver-manager to get ChromeDriver...")
+            service = Service(ChromeDriverManager().install())
+        else:
+            LOGGER.info("Using system ChromeDriver...")
+            service = Service()
+    except Exception as e:
+        LOGGER.warning("Failed to setup ChromeDriver with webdriver-manager: %s", e)
+        LOGGER.info("Falling back to system ChromeDriver...")
         service = Service()
+    
+    try:
+        LOGGER.info("Starting Chrome (this may take 10-30 seconds)...")
         driver = webdriver.Chrome(service=service, options=options)
         LOGGER.info("Chrome driver created successfully!")
         
