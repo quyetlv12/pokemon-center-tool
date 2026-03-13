@@ -66,11 +66,21 @@ if %errorlevel% equ 0 (
     if "%ERRORLEVEL%"=="0" (
         echo [!] Closing existing Chrome instances...
         taskkill /F /IM chrome.exe >nul 2>&1
-        timeout /t 2 /nobreak >nul
+        echo [i] Waiting for Chrome to fully close...
+        timeout /t 3 /nobreak >nul
+        
+        REM Double check Chrome is closed
+        tasklist /FI "IMAGENAME eq chrome.exe" 2>NUL | find /I /N "chrome.exe">NUL
+        if "%ERRORLEVEL%"=="0" (
+            echo [!] Chrome is still running, trying again...
+            taskkill /F /IM chrome.exe /T >nul 2>&1
+            timeout /t 2 /nobreak >nul
+        )
     )
     
     REM Start Chrome
-    start "" "%CHROME_PATH%" --remote-debugging-port=9222 --user-data-dir="%CHROME_DATA%" --profile-directory=Default --no-first-run --no-default-browser-check
+    echo [i] Starting Chrome with debug mode...
+    start "" "%CHROME_PATH%" --remote-debugging-port=9222 --user-data-dir="%CHROME_DATA%" --profile-directory=Default --no-first-run --no-default-browser-check --disable-blink-features=AutomationControlled
     
     echo [✓] Chrome started
     echo [i] Waiting for Chrome to initialize...
