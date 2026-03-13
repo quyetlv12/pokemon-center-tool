@@ -69,3 +69,10 @@ Sau lần đầu, profile đã giữ cookie/session nên các lần sau thườn
 
 - `pokemon_center_bot.py`: CLI + flow automation
 - `config.example.json`: mẫu config
+
+open -na "Brave Browser" --args \
+ --remote-debugging-port=9222 \
+ --user-data-dir="$HOME/Library/Application Support/BraveSoftware/Brave-Browser" \
+ --profile-directory="Default"
+
+python3 pokemon_center_bot.py
