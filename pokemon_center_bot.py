@@ -28,7 +28,8 @@ if SYSTEM == "Darwin":  # macOS
         Path.home() / "Library/Application Support/BraveSoftware/Brave-Browser"
     )
 elif SYSTEM == "Windows":
-    # Windows: Use the actual User Data directory (not "User Data" subfolder)
+    # Windows: Path to the parent directory (NOT including "User Data")
+    # Brave will automatically append "User Data" internally
     BRAVE_USER_DATA_DIR = (
         Path.home() / "AppData/Local/BraveSoftware/Brave-Browser/User Data"
     )
@@ -42,6 +43,8 @@ BRAVE_DEBUG_HOST = "127.0.0.1"
 BRAVE_DEBUG_PORT = 9222
 TARGET_SLIDE_SELECTOR = '.swiper-slide[data-swiper-slide-index="0"] a'
 LOTTERY_BUTTON_SELECTOR = ".comBtn.fixBtn a.goLotteryBtn"
+LOGIN_URL = "https://www.pokemoncenter-online.com/lottery/login.html"
+LOTTERY_LIST_URL_PATTERN = "lottery/list"
 LOTTERY_ITEM_SELECTOR = "ul.comOrderList > li"
 LOTTERY_TITLE_SELECTOR = "div.lBox > p"
 DETAIL_TOGGLE_SELECTOR = "dl.subDl > dt"
@@ -81,6 +84,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=BRAVE_DEBUG_PORT,
         help=f"Remote debugging port. Default: {BRAVE_DEBUG_PORT}",
+    )
+    parser.add_argument(
+        "--list-profiles",
+        action="store_true",
+        help="List available Brave profiles and exit.",
     )
     return parser.parse_args()
 
@@ -149,8 +157,13 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
 
     # Use custom user data dir if provided
     actual_user_data_dir = Path(user_data_dir) if user_data_dir else BRAVE_USER_DATA_DIR
-    LOGGER.info("User data directory: %s", actual_user_data_dir)
-    LOGGER.info("Profile directory: %s", profile)
+    LOGGER.info("=" * 60)
+    LOGGER.info("Brave Configuration:")
+    LOGGER.info("  User data directory: %s", actual_user_data_dir)
+    LOGGER.info("  Profile directory: %s", profile)
+    LOGGER.info("  Full profile path: %s", actual_user_data_dir / profile)
+    LOGGER.info("  Profile exists: %s", (actual_user_data_dir / profile).exists())
+    LOGGER.info("=" * 60)
 
     if is_port_open(BRAVE_DEBUG_HOST, debug_port):
         options.debugger_address = f"{BRAVE_DEBUG_HOST}:{debug_port}"
@@ -159,6 +172,7 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
             BRAVE_DEBUG_HOST,
             debug_port,
         )
+        LOGGER.info("NOTE: When attaching, profile settings are ignored (using existing session)")
     else:
         # Check if Brave is running with the same profile
         if is_brave_running():
@@ -168,9 +182,26 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
             )
             LOGGER.info("Attempting to start new instance anyway...")
         
-        LOGGER.info("Starting new Brave instance with user data dir: %s", actual_user_data_dir)
+        LOGGER.info("Starting new Brave instance...")
+        
+        # Ensure user data directory exists
+        if not actual_user_data_dir.exists():
+            LOGGER.error("User data directory does not exist: %s", actual_user_data_dir)
+            LOGGER.error("Please check the path or use --list-profiles to see available profiles")
+            raise FileNotFoundError(f"User data directory not found: {actual_user_data_dir}")
+        
+        # Check if profile exists
+        profile_path = actual_user_data_dir / profile
+        if not profile_path.exists():
+            LOGGER.warning("Profile directory does not exist: %s", profile_path)
+            LOGGER.warning("Brave will create a new profile with this name")
+            LOGGER.warning("Use --list-profiles to see available profiles")
+        
         options.add_argument(f"--user-data-dir={actual_user_data_dir}")
         options.add_argument(f"--profile-directory={profile}")
+        LOGGER.info("Chrome arguments:")
+        LOGGER.info("  --user-data-dir=%s", actual_user_data_dir)
+        LOGGER.info("  --profile-directory=%s", profile)
 
     options.add_argument("--start-maximized")
     options.add_argument("--disable-dev-shm-usage")
@@ -188,12 +219,113 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
     return webdriver.Chrome(service=service, options=options)
 
 
+def list_brave_profiles(user_data_dir: Path) -> None:
+    """List all available Brave profiles"""
+    print("=" * 60)
+    print("Available Brave Profiles")
+    print("=" * 60)
+    print(f"User Data Directory: {user_data_dir}")
+    print()
+    
+    if not user_data_dir.exists():
+        print(f"ERROR: User data directory does not exist!")
+        print(f"Path: {user_data_dir}")
+        return
+    
+    # Find all profile directories
+    profiles = []
+    for item in user_data_dir.iterdir():
+        if item.is_dir():
+            # Check if it's a profile directory (has Preferences file)
+            prefs_file = item / "Preferences"
+            if prefs_file.exists():
+                profiles.append(item.name)
+    
+    if not profiles:
+        print("No profiles found!")
+        return
+    
+    print(f"Found {len(profiles)} profile(s):")
+    print()
+    for profile in sorted(profiles):
+        profile_path = user_data_dir / profile
+        prefs_file = profile_path / "Preferences"
+        
+        # Try to read profile name from Preferences
+        profile_name = profile
+        try:
+            import json
+            with open(prefs_file, 'r', encoding='utf-8') as f:
+                prefs = json.load(f)
+                if 'profile' in prefs and 'name' in prefs['profile']:
+                    profile_name = prefs['profile']['name']
+        except:
+            pass
+        
+        print(f"  - {profile}")
+        if profile_name != profile:
+            print(f"    Name: {profile_name}")
+        print(f"    Path: {profile_path}")
+        print()
+
+
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+
+def wait_for_login(driver: webdriver.Chrome, timeout: int = 300) -> bool:
+    """
+    Wait for user to login if redirected to login page.
+    Returns True if login successful, False if timeout.
+    """
+    import time
+    
+    current_url = driver.current_url
+    LOGGER.info("Current URL: %s", current_url)
+    
+    if LOGIN_URL in current_url:
+        LOGGER.warning("=" * 60)
+        LOGGER.warning("REDIRECTED TO LOGIN PAGE!")
+        LOGGER.warning("Please login to Pokemon Center Online in the browser")
+        LOGGER.warning("The script will wait for you to complete login...")
+        LOGGER.warning("Waiting up to %d seconds", timeout)
+        LOGGER.warning("=" * 60)
+        
+        print("\n" + "=" * 60)
+        print("⚠️  PLEASE LOGIN IN THE BROWSER WINDOW")
+        print("=" * 60)
+        print("The script is waiting for you to:")
+        print("1. Enter your email/username")
+        print("2. Enter your password")
+        print("3. Click login button")
+        print()
+        print(f"Timeout: {timeout} seconds")
+        print("=" * 60 + "\n")
+        
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            current_url = driver.current_url
+            
+            # Check if user has logged in (URL changed from login page)
+            if LOGIN_URL not in current_url:
+                LOGGER.info("Login successful! Current URL: %s", current_url)
+                print("\n✓ Login successful!")
+                print("Continuing with lottery application...\n")
+                time.sleep(2)  # Wait a bit for page to fully load
+                return True
+            
+            # Wait a bit before checking again
+            time.sleep(1)
+        
+        LOGGER.error("Login timeout! User did not login within %d seconds", timeout)
+        print("\n✗ Login timeout!")
+        return False
+    
+    return True
 
 
 def find_target_slide_link(driver: webdriver.Chrome) -> WebElement:
@@ -488,6 +620,13 @@ def apply_lottery_entries(driver: webdriver.Chrome) -> None:
 def main() -> int:
     configure_logging()
     args = parse_args()
+    
+    # Handle --list-profiles
+    if args.list_profiles:
+        user_data_dir = Path(args.user_data_dir) if args.user_data_dir else BRAVE_USER_DATA_DIR
+        list_brave_profiles(user_data_dir)
+        return 0
+    
     driver: Optional[webdriver.Chrome] = None
 
     try:
@@ -499,12 +638,40 @@ def main() -> int:
         )
         LOGGER.info("Opening %s", args.url)
         driver.get(args.url)
+        
+        # Wait for page to load
+        import time
+        time.sleep(2)
+        
+        # Check if we need to login
+        if not wait_for_login(driver):
+            LOGGER.error("Failed to login. Exiting...")
+            return 1
+        
         target_link = find_target_slide_link(driver)
         LOGGER.info("Clicking slide link with data-swiper-slide-index=0")
         click_element(driver, target_link)
+        
+        # Wait for navigation
+        time.sleep(2)
+        
+        # Check if redirected to login again
+        if not wait_for_login(driver):
+            LOGGER.error("Failed to login. Exiting...")
+            return 1
+        
         lottery_button = find_visible_element(driver, LOTTERY_BUTTON_SELECTOR)
         LOGGER.info("Clicking lottery button")
         click_element(driver, lottery_button)
+        
+        # Wait for navigation
+        time.sleep(2)
+        
+        # Check if redirected to login again
+        if not wait_for_login(driver):
+            LOGGER.error("Failed to login. Exiting...")
+            return 1
+        
         apply_lottery_entries(driver)
         input("Chrome đã mở trang. Nhấn Enter để đóng browser...")
         return 0
