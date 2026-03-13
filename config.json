@@ -1,0 +1,11 @@
+{
+  "product_url": "https://www.pokemoncenter-online.com/4521329462172.html",
+  "quantity": 1,
+  "poll_interval_seconds": 2.0,
+  "max_wait_minutes": 0,
+  "profile_dir": ".chrome-profile",
+  "headless": false,
+  "checkout": true,
+  "auto_submit_final_order": false,
+  "manual_login_timeout_minutes": 10
+}
