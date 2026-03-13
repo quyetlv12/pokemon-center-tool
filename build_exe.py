@@ -16,16 +16,24 @@ def build():
         '--console',  # Show console window
         '--clean',  # Clean PyInstaller cache
         '--noconfirm',  # Replace output directory without asking
+        # Add hook file for selenium
+        '--additional-hooks-dir=.',
         # Add icon if you have one
         # '--icon=icon.ico',
         # Hidden imports that might be needed
         '--hidden-import=selenium',
         '--hidden-import=selenium.webdriver',
         '--hidden-import=selenium.webdriver.chrome',
+        '--hidden-import=selenium.webdriver.chrome.options',
         '--hidden-import=selenium.webdriver.chrome.service',
         '--hidden-import=selenium.webdriver.common.by',
         '--hidden-import=selenium.webdriver.support.ui',
+        '--hidden-import=selenium.webdriver.support.wait',
         '--hidden-import=selenium.webdriver.remote.webelement',
+        '--hidden-import=selenium.common',
+        '--hidden-import=selenium.common.exceptions',
+        # Collect all selenium submodules
+        '--collect-all=selenium',
     ]
     
     print("Building executable...")
