@@ -4,9 +4,33 @@ Build script to create executable using PyInstaller
 import PyInstaller.__main__
 import sys
 import os
+import time
+import shutil
 
 def build():
     """Build the executable"""
+    
+    # Clean up old build files
+    print("Cleaning up old build files...")
+    dirs_to_clean = ['build', 'dist', '__pycache__']
+    for dir_name in dirs_to_clean:
+        if os.path.exists(dir_name):
+            try:
+                shutil.rmtree(dir_name)
+                print(f"  Removed {dir_name}/")
+            except Exception as e:
+                print(f"  Warning: Could not remove {dir_name}/: {e}")
+    
+    # Remove old spec file if exists
+    spec_file = 'PokemonCenterBot.spec'
+    if os.path.exists(spec_file):
+        try:
+            os.remove(spec_file)
+            print(f"  Removed {spec_file}")
+        except Exception as e:
+            print(f"  Warning: Could not remove {spec_file}: {e}")
+    
+    print()
     
     # PyInstaller arguments
     args = [
@@ -38,13 +62,21 @@ def build():
     
     print("Building executable...")
     print(f"Arguments: {' '.join(args)}")
+    print()
     
-    PyInstaller.__main__.run(args)
-    
-    print("\n" + "="*60)
-    print("Build complete!")
-    print("Executable location: dist/PokemonCenterBot.exe")
-    print("="*60)
+    try:
+        PyInstaller.__main__.run(args)
+        
+        print("\n" + "="*60)
+        print("Build complete!")
+        print("Executable location: dist/PokemonCenterBot.exe")
+        print("="*60)
+        return 0
+    except Exception as e:
+        print("\n" + "="*60)
+        print(f"Build failed: {e}")
+        print("="*60)
+        return 1
 
 if __name__ == '__main__':
-    build()
+    sys.exit(build())
