@@ -24,23 +24,22 @@ DEFAULT_BASE_URL = "https://www.pokemoncenter-online.com"
 SYSTEM = platform.system()
 
 if SYSTEM == "Darwin":  # macOS
-    BRAVE_USER_DATA_DIR = (
-        Path.home() / "Library/Application Support/BraveSoftware/Brave-Browser"
+    CHROME_USER_DATA_DIR = (
+        Path.home() / "Library/Application Support/Google/Chrome"
     )
 elif SYSTEM == "Windows":
-    # Windows: Path to the parent directory (NOT including "User Data")
-    # Brave will automatically append "User Data" internally
-    BRAVE_USER_DATA_DIR = (
-        Path.home() / "AppData/Local/BraveSoftware/Brave-Browser/User Data"
+    # Windows: Path to Chrome User Data directory
+    CHROME_USER_DATA_DIR = (
+        Path.home() / "AppData/Local/Google/Chrome/User Data"
     )
 else:  # Linux
-    BRAVE_USER_DATA_DIR = (
-        Path.home() / ".config/BraveSoftware/Brave-Browser"
+    CHROME_USER_DATA_DIR = (
+        Path.home() / ".config/google-chrome"
     )
 
-BRAVE_PROFILE_DIRECTORY = "Default"
-BRAVE_DEBUG_HOST = "127.0.0.1"
-BRAVE_DEBUG_PORT = 9222
+CHROME_PROFILE_DIRECTORY = "Default"
+CHROME_DEBUG_HOST = "127.0.0.1"
+CHROME_DEBUG_PORT = 9222
 TARGET_SLIDE_SELECTOR = '.swiper-slide[data-swiper-slide-index="0"] a'
 LOTTERY_BUTTON_SELECTOR = ".comBtn.fixBtn a.goLotteryBtn"
 LOGIN_URL = "https://www.pokemoncenter-online.com/lottery/login.html"
@@ -82,8 +81,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--debug-port",
         type=int,
-        default=BRAVE_DEBUG_PORT,
-        help=f"Remote debugging port. Default: {BRAVE_DEBUG_PORT}",
+        default=CHROME_DEBUG_PORT,
+        help=f"Remote debugging port. Default: {CHROME_DEBUG_PORT}",
     )
     parser.add_argument(
         "--list-profiles",
@@ -98,27 +97,28 @@ def detect_browser_binary() -> Optional[str]:
     
     if system == "Darwin":  # macOS
         candidates = (
-            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         )
     elif system == "Windows":
         candidates = (
-            str(Path.home() / "AppData/Local/BraveSoftware/Brave-Browser/Application/brave.exe"),
-            "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe",
-            "C:/Program Files (x86)/BraveSoftware/Brave-Browser/Application/brave.exe",
+            "C:/Program Files/Google/Chrome/Application/chrome.exe",
+            "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+            str(Path.home() / "AppData/Local/Google/Chrome/Application/chrome.exe"),
         )
     else:  # Linux
         candidates = (
-            "/usr/bin/brave-browser",
-            "/usr/bin/brave-browser-stable",
-            "/usr/bin/brave",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
         )
     
     for candidate in candidates:
         if Path(candidate).exists():
-            LOGGER.info("Found Brave browser at: %s", candidate)
+            LOGGER.info("Found Chrome browser at: %s", candidate)
             return candidate
     
-    LOGGER.error("Brave browser not found. Tried: %s", candidates)
+    LOGGER.error("Chrome browser not found. Tried: %s", candidates)
     return None
 
 
@@ -128,61 +128,61 @@ def is_port_open(host: str, port: int) -> bool:
         return sock.connect_ex((host, port)) == 0
 
 
-def is_brave_running() -> bool:
+def is_chrome_running() -> bool:
     system = platform.system()
     
     if system == "Darwin":  # macOS
-        lock_file = BRAVE_USER_DATA_DIR / "SingletonLock"
+        lock_file = CHROME_USER_DATA_DIR / "SingletonLock"
         return lock_file.exists()
     elif system == "Windows":
         # On Windows, check for lockfile in the profile directory
-        lock_file = BRAVE_USER_DATA_DIR / "lockfile"
-        singleton_lock = BRAVE_USER_DATA_DIR / "SingletonLock"
+        lock_file = CHROME_USER_DATA_DIR / "lockfile"
+        singleton_lock = CHROME_USER_DATA_DIR / "SingletonLock"
         return lock_file.exists() or singleton_lock.exists()
     else:  # Linux
-        lock_file = BRAVE_USER_DATA_DIR / "SingletonLock"
+        lock_file = CHROME_USER_DATA_DIR / "SingletonLock"
         return lock_file.exists()
 
 
-def build_driver(headless: bool, profile: str = "Default", user_data_dir: Optional[str] = None, debug_port: int = BRAVE_DEBUG_PORT) -> webdriver.Chrome:
+def build_driver(headless: bool, profile: str = "Default", user_data_dir: Optional[str] = None, debug_port: int = CHROME_DEBUG_PORT) -> webdriver.Chrome:
     options = ChromeOptions()
     binary = detect_browser_binary()
     if not binary:
         raise FileNotFoundError(
-            f"Brave Browser binary not found on this machine ({platform.system()}). "
-            "Please install Brave Browser or update the path in detect_browser_binary()."
+            f"Chrome browser not found on this machine ({platform.system()}). "
+            "Please install Google Chrome or update the path in detect_browser_binary()."
         )
     options.binary_location = binary
-    LOGGER.info("Using Brave browser at: %s", binary)
+    LOGGER.info("Using Chrome browser at: %s", binary)
 
     # Use custom user data dir if provided
-    actual_user_data_dir = Path(user_data_dir) if user_data_dir else BRAVE_USER_DATA_DIR
+    actual_user_data_dir = Path(user_data_dir) if user_data_dir else CHROME_USER_DATA_DIR
     LOGGER.info("=" * 60)
-    LOGGER.info("Brave Configuration:")
+    LOGGER.info("Chrome Configuration:")
     LOGGER.info("  User data directory: %s", actual_user_data_dir)
     LOGGER.info("  Profile directory: %s", profile)
     LOGGER.info("  Full profile path: %s", actual_user_data_dir / profile)
     LOGGER.info("  Profile exists: %s", (actual_user_data_dir / profile).exists())
     LOGGER.info("=" * 60)
 
-    if is_port_open(BRAVE_DEBUG_HOST, debug_port):
-        options.debugger_address = f"{BRAVE_DEBUG_HOST}:{debug_port}"
+    if is_port_open(CHROME_DEBUG_HOST, debug_port):
+        options.debugger_address = f"{CHROME_DEBUG_HOST}:{debug_port}"
         LOGGER.info(
-            "Attaching to existing Brave at %s:%s",
-            BRAVE_DEBUG_HOST,
+            "Attaching to existing Chrome at %s:%s",
+            CHROME_DEBUG_HOST,
             debug_port,
         )
         LOGGER.info("NOTE: When attaching, profile settings are ignored (using existing session)")
     else:
-        # Check if Brave is running with the same profile
-        if is_brave_running():
+        # Check if Chrome is running with the same profile
+        if is_chrome_running():
             LOGGER.warning(
-                "Brave appears to be running. If you want to use the existing Brave instance, "
-                "start Brave with: --remote-debugging-port=%d", debug_port
+                "Chrome appears to be running. If you want to use the existing Chrome instance, "
+                "start Chrome with: --remote-debugging-port=%d", debug_port
             )
             LOGGER.info("Attempting to start new instance anyway...")
         
-        LOGGER.info("Starting new Brave instance...")
+        LOGGER.info("Starting new Chrome instance...")
         
         # Ensure user data directory exists
         if not actual_user_data_dir.exists():
@@ -194,7 +194,7 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
         profile_path = actual_user_data_dir / profile
         if not profile_path.exists():
             LOGGER.warning("Profile directory does not exist: %s", profile_path)
-            LOGGER.warning("Brave will create a new profile with this name")
+            LOGGER.warning("Chrome will create a new profile with this name")
             LOGGER.warning("Use --list-profiles to see available profiles")
         
         options.add_argument(f"--user-data-dir={actual_user_data_dir}")
@@ -220,9 +220,9 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
 
 
 def list_brave_profiles(user_data_dir: Path) -> None:
-    """List all available Brave profiles"""
+    """List all available Chrome profiles"""
     print("=" * 60)
-    print("Available Brave Profiles")
+    print("Available Chrome Profiles")
     print("=" * 60)
     print(f"User Data Directory: {user_data_dir}")
     print()
@@ -623,7 +623,7 @@ def main() -> int:
     
     # Handle --list-profiles
     if args.list_profiles:
-        user_data_dir = Path(args.user_data_dir) if args.user_data_dir else BRAVE_USER_DATA_DIR
+        user_data_dir = Path(args.user_data_dir) if args.user_data_dir else CHROME_USER_DATA_DIR
         list_brave_profiles(user_data_dir)
         return 0
     

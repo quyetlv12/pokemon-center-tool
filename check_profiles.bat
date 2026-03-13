@@ -1,8 +1,8 @@
 @echo off
-REM Check available Brave profiles
+REM Check available Chrome profiles
 
 echo ========================================
-echo Brave Profile Checker
+echo Chrome Profile Checker
 echo ========================================
 echo.
 
