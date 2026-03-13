@@ -155,126 +155,55 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
     
     options = ChromeOptions()
     
-    # Use custom user data dir if provided
-    actual_user_data_dir = Path(user_data_dir) if user_data_dir else CHROME_USER_DATA_DIR
-    
     LOGGER.info("=" * 60)
     LOGGER.info("Chrome Configuration:")
-    LOGGER.info("  User data directory: %s", actual_user_data_dir)
-    LOGGER.info("  Profile directory: %s", profile)
     LOGGER.info("  Debug port: %s", debug_port)
     LOGGER.info("=" * 60)
 
-    # Check if Chrome is running with debug port
+    # ALWAYS try to attach to existing Chrome first
     if is_port_open(CHROME_DEBUG_HOST, debug_port):
-        LOGGER.info("Found Chrome running on debug port %s", debug_port)
-        LOGGER.info("Attaching to existing Chrome instance...")
+        LOGGER.info("✓ Found Chrome running on debug port %s", debug_port)
+        LOGGER.info("  Attaching to existing Chrome instance...")
         options.debugger_address = f"{CHROME_DEBUG_HOST}:{debug_port}"
         
-        # Don't set binary location or user data dir when attaching
-        LOGGER.info("NOTE: Using existing Chrome session")
+        # Don't set any other options when attaching
+        LOGGER.info("  Using existing Chrome session")
     else:
-        LOGGER.info("No Chrome instance found on debug port %s", debug_port)
-        
-        # Check if Chrome is running without debug port
-        if is_chrome_running():
-            LOGGER.error("")
-            LOGGER.error("=" * 60)
-            LOGGER.error("ERROR: Chrome is already running!")
-            LOGGER.error("=" * 60)
-            LOGGER.error("")
-            LOGGER.error("Chrome is running but NOT in debug mode.")
-            LOGGER.error("This will cause conflicts.")
-            LOGGER.error("")
-            LOGGER.error("Please do ONE of the following:")
-            LOGGER.error("")
-            LOGGER.error("Option 1 (Recommended):")
-            LOGGER.error("  1. Close ALL Chrome windows")
-            LOGGER.error("  2. Run: START_HERE.bat")
-            LOGGER.error("")
-            LOGGER.error("Option 2:")
-            LOGGER.error("  1. Close ALL Chrome windows")
-            LOGGER.error("  2. Open Chrome manually with:")
-            LOGGER.error('     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222')
-            LOGGER.error("  3. Run this tool again")
-            LOGGER.error("")
-            LOGGER.error("=" * 60)
-            
-            raise RuntimeError(
-                "Chrome is already running without debug mode. "
-                "Please close Chrome and run START_HERE.bat"
-            )
-        
-        LOGGER.info("Starting new Chrome instance...")
-        
-        # Detect and set Chrome binary
-        binary = detect_browser_binary()
-        if not binary:
-            raise FileNotFoundError(
-                f"Chrome browser not found on this machine ({platform.system()}). "
-                "Please install Google Chrome."
-            )
-        options.binary_location = binary
-        LOGGER.info("Chrome binary: %s", binary)
-        
-        # Ensure user data directory exists
-        if not actual_user_data_dir.exists():
-            LOGGER.error("User data directory does not exist: %s", actual_user_data_dir)
-            LOGGER.error("Creating directory...")
-            try:
-                actual_user_data_dir.mkdir(parents=True, exist_ok=True)
-                LOGGER.info("Created user data directory")
-            except Exception as e:
-                LOGGER.error("Failed to create directory: %s", e)
-                raise
-        
-        # Check if profile exists
-        profile_path = actual_user_data_dir / profile
-        if profile_path.exists():
-            LOGGER.info("Profile exists: %s", profile_path)
-            
-            # Check if profile is locked
-            lock_files = [
-                profile_path / "Cookies-journal",
-                profile_path / "lockfile",
-            ]
-            for lock_file in lock_files:
-                if lock_file.exists():
-                    LOGGER.warning("Profile may be locked: %s exists", lock_file.name)
+        LOGGER.error("")
+        LOGGER.error("=" * 60)
+        LOGGER.error("ERROR: Chrome is not running in debug mode!")
+        LOGGER.error("=" * 60)
+        LOGGER.error("")
+        LOGGER.error("This tool requires Chrome to be running with debug port.")
+        LOGGER.error("")
+        LOGGER.error("Please follow these steps:")
+        LOGGER.error("")
+        LOGGER.error("1. Close this tool")
+        LOGGER.error("2. Run: START_HERE.bat (Windows) or ./START_HERE.sh (Mac)")
+        LOGGER.error("")
+        LOGGER.error("OR manually:")
+        LOGGER.error("")
+        if platform.system() == "Windows":
+            LOGGER.error('1. Close all Chrome windows')
+            LOGGER.error('2. Run this command:')
+            LOGGER.error('   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --remote-debugging-port=9222')
         else:
-            LOGGER.info("Profile does not exist, Chrome will create it: %s", profile_path)
+            LOGGER.error('1. Close all Chrome windows')
+            LOGGER.error('2. Run this command:')
+            LOGGER.error('   open -a "Google Chrome" --args --remote-debugging-port=9222')
+        LOGGER.error("")
+        LOGGER.error("3. Then run this tool again")
+        LOGGER.error("")
+        LOGGER.error("=" * 60)
         
-        # Set Chrome arguments - IMPORTANT: Use proper path format
-        user_data_str = str(actual_user_data_dir).replace('\\', '/')
-        options.add_argument(f"--user-data-dir={user_data_str}")
-        options.add_argument(f"--profile-directory={profile}")
-        options.add_argument(f"--remote-debugging-port={debug_port}")
-        
-        LOGGER.info("Chrome will start with:")
-        LOGGER.info("  --user-data-dir=%s", user_data_str)
-        LOGGER.info("  --profile-directory=%s", profile)
-        LOGGER.info("  --remote-debugging-port=%s", debug_port)
+        raise RuntimeError(
+            "Chrome is not running with debug port. "
+            "Please run START_HERE script first."
+        )
 
-    # Common options
-    options.add_argument("--start-maximized")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--no-first-run")
-    options.add_argument("--no-default-browser-check")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    
-    # Disable automation flags
+    # Common options for attach mode
     options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     options.add_experimental_option('useAutomationExtension', False)
-    
-    # Windows-specific options
-    if platform.system() == "Windows":
-        options.add_argument("--disable-gpu")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-software-rasterizer")
-    
-    if headless:
-        options.add_argument("--headless=new")
-        options.add_argument("--window-size=1400,1400")
 
     LOGGER.info("Creating Chrome driver...")
     
@@ -292,17 +221,18 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
         service = Service()
     
     try:
-        LOGGER.info("Starting Chrome (this may take 10-30 seconds)...")
+        LOGGER.info("Connecting to Chrome...")
         driver = webdriver.Chrome(service=service, options=options)
-        LOGGER.info("Chrome driver created successfully!")
+        LOGGER.info("✓ Chrome driver created successfully!")
         
-        # Wait a bit for Chrome to fully initialize
-        time.sleep(2)
+        # Wait a bit for connection to stabilize
+        time.sleep(1)
         
         # Test if we can control Chrome
         try:
             current_url = driver.current_url
-            LOGGER.info("Successfully connected to Chrome. Current URL: %s", current_url)
+            LOGGER.info("✓ Successfully connected to Chrome")
+            LOGGER.info("  Current URL: %s", current_url)
         except Exception as e:
             LOGGER.warning("Connected but cannot get current URL: %s", e)
         
@@ -314,34 +244,22 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
         
         # Provide helpful error messages
         error_str = str(e).lower()
-        if "chrome instance exited" in error_str or "session not created" in error_str:
-            LOGGER.error("")
-            LOGGER.error("=" * 60)
-            LOGGER.error("Chrome failed to start!")
-            LOGGER.error("=" * 60)
-            LOGGER.error("")
-            LOGGER.error("Common causes:")
-            LOGGER.error("1. Another Chrome instance is using the same profile")
-            LOGGER.error("2. Profile directory is locked or corrupted")
-            LOGGER.error("3. ChromeDriver version mismatch")
-            LOGGER.error("")
-            LOGGER.error("Solutions:")
-            LOGGER.error("1. Close ALL Chrome windows (check Task Manager)")
-            LOGGER.error("2. Wait 5 seconds")
-            LOGGER.error("3. Run: START_HERE.bat")
-            LOGGER.error("")
-            LOGGER.error("If problem persists:")
-            LOGGER.error("- Try a different profile: --profile \"Profile 1\"")
-            LOGGER.error("- Update Chrome to latest version")
-            LOGGER.error("- Update selenium: pip install --upgrade selenium")
-            LOGGER.error("")
-            LOGGER.error("=" * 60)
-        elif "chrome not reachable" in error_str:
-            LOGGER.error("")
-            LOGGER.error("Chrome is not reachable. Possible causes:")
-            LOGGER.error("1. Chrome crashed or was closed")
-            LOGGER.error("2. Chrome is not running with --remote-debugging-port=%s", debug_port)
-            LOGGER.error("3. Another process is using port %s", debug_port)
+        LOGGER.error("")
+        LOGGER.error("=" * 60)
+        LOGGER.error("Failed to connect to Chrome!")
+        LOGGER.error("=" * 60)
+        LOGGER.error("")
+        LOGGER.error("Troubleshooting:")
+        LOGGER.error("1. Make sure Chrome is running")
+        LOGGER.error("2. Make sure Chrome was started with --remote-debugging-port=9222")
+        LOGGER.error("3. Check if port 9222 is available:")
+        if platform.system() == "Windows":
+            LOGGER.error("   netstat -ano | findstr :9222")
+        else:
+            LOGGER.error("   lsof -i :9222")
+        LOGGER.error("4. Try running: START_HERE script")
+        LOGGER.error("")
+        LOGGER.error("=" * 60)
         
         raise
 

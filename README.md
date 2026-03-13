@@ -1,78 +1,210 @@
-# Pokemon Center Online Auto Buyer
+# Pokemon Center Bot
 
-Tool Python chạy với Chrome để theo dõi hàng về, thêm vào giỏ, và đi tiếp tới bước xác nhận đơn cuối cùng trên `pokemoncenter-online.com`.
-
-## Cách làm việc
-
-- Dùng Selenium + Chrome profile riêng để giữ session đăng nhập.
-- Tự refresh trang sản phẩm cho đến khi hết trạng thái `品切れ`.
-- Tự thêm vào cart và đi qua các bước checkout phổ biến.
-- Mặc định dừng ở nút đặt hàng cuối để bạn tự kiểm tra trước khi mua.
+Tự động đăng ký xổ số Pokemon Center Online cho cả Windows và macOS.
 
 ## Yêu cầu
 
-- macOS có cài Google Chrome
-- Python 3.9+
+- Python 3.7+
+- Google Chrome
+- pip (Python package manager)
 
 ## Cài đặt
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
+### Windows
+
+```cmd
+# Cài đặt dependencies
 pip install -r requirements.txt
+
+# Cài đặt ChromeDriver
+install_chromedriver.bat
 ```
 
-Project đã có sẵn `config.json`. Sửa file này trước khi chạy:
+### macOS/Linux
 
-- `product_url`: link sản phẩm cần mua
-- `quantity`: số lượng
-- `poll_interval_seconds`: chu kỳ refresh
-- `max_wait_minutes`: `0` là chờ vô hạn
-- `profile_dir`: thư mục Chrome profile local cho bot
-- `checkout`: `true` để đi tiếp qua checkout
-- `auto_submit_final_order`: `false` để dừng ở trang xác nhận cuối
+```bash
+# Cấp quyền thực thi cho scripts
+chmod +x *.sh
 
-## Chạy
+# Cài đặt dependencies
+pip3 install -r requirements.txt
 
+# Cài đặt ChromeDriver
+./install_chromedriver.sh
+```
+
+## Sử dụng
+
+### Cách đơn giản nhất (Khuyến nghị)
+
+#### Windows
+```cmd
+START_HERE.bat
+```
+
+#### macOS/Linux
+```bash
+./START_HERE.sh
+```
+
+Script sẽ tự động:
+1. Đóng Chrome cũ
+2. Mở Chrome với profile Default + debug mode
+3. Chạy bot tự động
+
+### Chạy từ source code
+
+#### Windows
+```cmd
+python pokemon_center_bot.py
+```
+
+#### macOS/Linux
 ```bash
 python3 pokemon_center_bot.py
 ```
 
-Override nhanh bằng CLI:
+### Các tùy chọn
 
 ```bash
-python3 pokemon_center_bot.py \
-  --product-url "https://www.pokemoncenter-online.com/4521329462172.html" \
-  --quantity 1
+# Sử dụng profile khác
+python3 pokemon_center_bot.py --profile "Profile 1"
+
+# Chỉ định User Data Directory
+python3 pokemon_center_bot.py --user-data-dir "/path/to/chrome/data"
+
+# Liệt kê profiles có sẵn
+python3 pokemon_center_bot.py --list-profiles
+
+# Chạy headless (không hiển thị UI)
+python3 pokemon_center_bot.py --headless
 ```
 
-## Luồng đăng nhập
+## Troubleshooting
 
-Site này có `reCAPTCHA Enterprise` và trang `login-mfa`, nên script không cố fake đăng nhập bằng HTTP request.
+### Lỗi: Chrome không khởi động hoặc bị treo
 
-Luồng thực tế:
+#### Windows
+```cmd
+# 1. Fix Chrome locks
+fix_chrome_lock.bat
 
-1. Bot mở Chrome bằng profile riêng ở `profile_dir`
-2. Nếu bị chuyển sang trang login/MFA, bạn đăng nhập trực tiếp trên Chrome
-3. Quay lại terminal và nhấn `Enter`
-4. Bot tiếp tục dùng session vừa có
+# 2. Test Chrome connection
+quick_test.bat
 
-Sau lần đầu, profile đã giữ cookie/session nên các lần sau thường không cần login lại cho tới khi session hết hạn.
+# 3. Chạy lại
+START_HERE.bat
+```
 
-## Lưu ý thực tế
+#### macOS/Linux
+```bash
+# 1. Fix Chrome locks
+./fix_chrome_lock.sh
 
-- Không nên chạy `headless` khi login hoặc checkout.
-- Site có thể đổi selector hoặc thêm anti-bot/captcha, lúc đó cần cập nhật script.
-- `auto_submit_final_order=true` sẽ click nút đặt hàng cuối nếu tìm thấy. Chỉ bật khi bạn chấp nhận rủi ro mua tự động hoàn toàn.
+# 2. Test Chrome connection
+./quick_test.sh
 
-## File chính
+# 3. Chạy lại
+./START_HERE.sh
+```
 
-- `pokemon_center_bot.py`: CLI + flow automation
-- `config.example.json`: mẫu config
+### Lỗi: ChromeDriver version mismatch
 
-open -na "Brave Browser" --args \
- --remote-debugging-port=9222 \
- --user-data-dir="$HOME/Library/Application Support/BraveSoftware/Brave-Browser" \
- --profile-directory="Default"
+```bash
+# Windows
+install_chromedriver.bat
 
-python3 pokemon_center_bot.py
+# macOS/Linux
+./install_chromedriver.sh
+```
+
+### Lỗi: Chrome đang chạy
+
+Đóng tất cả Chrome windows và chạy lại, hoặc:
+
+#### Windows
+```cmd
+taskkill /F /IM chrome.exe
+```
+
+#### macOS
+```bash
+killall "Google Chrome"
+```
+
+#### Linux
+```bash
+killall chrome
+```
+
+## Build thành executable
+
+### Windows
+
+```cmd
+# Build
+build_exe.bat
+
+# File .exe sẽ nằm trong dist/
+dist\PokemonCenterBot.exe
+```
+
+### macOS/Linux
+
+```bash
+# Build
+./build_exe.sh
+
+# File executable sẽ nằm trong dist/
+./dist/PokemonCenterBot
+```
+
+## Cấu trúc thư mục
+
+```
+pokemon-center-tool/
+├── pokemon_center_bot.py      # Main script
+├── requirements.txt            # Python dependencies
+├── README.md                   # This file
+│
+├── Windows Scripts:
+├── START_HERE.bat             # All-in-one launcher (Windows)
+├── fix_chrome_lock.bat        # Fix Chrome profile locks
+├── install_chromedriver.bat   # Install ChromeDriver
+├── quick_test.bat             # Test Chrome connection
+├── build_exe.bat              # Build to .exe
+│
+├── macOS/Linux Scripts:
+├── START_HERE.sh              # All-in-one launcher (Unix)
+├── fix_chrome_lock.sh         # Fix Chrome profile locks
+├── install_chromedriver.sh    # Install ChromeDriver
+├── quick_test.sh              # Test Chrome connection
+├── build_exe.sh               # Build to executable
+│
+└── Test Scripts:
+    ├── quick_test.py          # Python test script
+    └── test_chrome_connection.py
+```
+
+## Tính năng
+
+- ✅ Tự động mở Chrome với profile đã đăng nhập
+- ✅ Tự động điền form đăng ký xổ số
+- ✅ Hỗ trợ đăng ký nhiều sản phẩm
+- ✅ Đợi user đăng nhập nếu chưa đăng nhập
+- ✅ Xử lý Vue.js rendering
+- ✅ Hỗ trợ cả Windows và macOS
+- ✅ Tự động tải đúng version ChromeDriver
+- ✅ Logging chi tiết
+- ✅ Error handling tốt
+
+## Lưu ý
+
+- Tool sẽ sử dụng profile "Default" của Chrome (nơi có session đăng nhập)
+- Nếu bị redirect về trang login, tool sẽ đợi bạn đăng nhập
+- Đảm bảo Chrome đã được cài đặt và chạy ít nhất 1 lần
+- Port 9222 phải available (không bị chiếm bởi app khác)
+
+## License
+
+MIT License
