@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Extension Icons</title>
+</head>
+<body>
+  <h2>Icon Generator</h2>
+  <p>Right-click on each canvas and "Save image as..." to icons folder</p>
+  
+  <div>
+    <h3>16x16</h3>
+    <canvas id="icon16" width="16" height="16"></canvas>
+  </div>
+  
+  <div>
+    <h3>48x48</h3>
+    <canvas id="icon48" width="48" height="48"></canvas>
+  </div>
+  
+  <div>
+    <h3>128x128</h3>
+    <canvas id="icon128" width="128" height="128"></canvas>
+  </div>
+  
+  <script>
+    function createIcon(canvasId, size) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+      
+      // Background
+      ctx.fillStyle = '#1976d2';
+      ctx.fillRect(0, 0, size, size);
+      
+      // Pokeball-like design
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Center circle
+      ctx.fillStyle = '#1976d2';
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Text (for larger icons)
+      if (size >= 48) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${size/6}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('PC', size/2, size - size/8);
+      }
+    }
+    
+    createIcon('icon16', 16);
+    createIcon('icon48', 48);
+    createIcon('icon128', 128);
+  </script>
+</body>
+</html>

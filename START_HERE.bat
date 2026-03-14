@@ -25,27 +25,7 @@ if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
     exit /b 1
 )
 
-echo [✓] Chrome found: %CHROME_PATH%
-
-REM Check Chrome User Data
-set CHROME_DATA=%LOCALAPPDATA%\Google\Chrome\User Data
-if not exist "%CHROME_DATA%" (
-    echo [ERROR] Chrome User Data not found!
-    echo Please run Chrome at least once before using this tool.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo [✓] Chrome User Data: %CHROME_DATA%
-
-REM Check Default profile
-if exist "%CHROME_DATA%\Default" (
-    echo [✓] Default profile found
-) else (
-    echo [!] Default profile will be created
-)
-
+echo [OK] Chrome found
 echo.
 echo ────────────────────────────────────────────────────────────
 echo.
@@ -55,49 +35,59 @@ netstat -ano | findstr :9222 >nul 2>&1
 if %errorlevel% equ 0 (
     echo [i] Chrome is already running with debug port 9222
     echo [i] Bot will attach to existing Chrome instance
-) else (
-    echo [i] Starting Chrome with debug mode...
-    echo [i] Profile: Default
-    echo [i] Debug Port: 9222
-    echo.
-    
-    REM Close existing Chrome instances
-    tasklist /FI "IMAGENAME eq chrome.exe" 2>NUL | find /I /N "chrome.exe">NUL
-    if "%ERRORLEVEL%"=="0" (
-        echo [!] Closing existing Chrome instances...
-        taskkill /F /IM chrome.exe >nul 2>&1
-        echo [i] Waiting for Chrome to fully close...
-        timeout /t 3 /nobreak >nul
-        
-        REM Double check Chrome is closed
-        tasklist /FI "IMAGENAME eq chrome.exe" 2>NUL | find /I /N "chrome.exe">NUL
-        if "%ERRORLEVEL%"=="0" (
-            echo [!] Chrome is still running, trying again...
-            taskkill /F /IM chrome.exe /T >nul 2>&1
-            timeout /t 2 /nobreak >nul
-        )
-    )
-    
-    REM Start Chrome
-    echo [i] Starting Chrome with debug mode...
-    start "" "%CHROME_PATH%" --remote-debugging-port=9222 --user-data-dir="%CHROME_DATA%" --profile-directory=Default --no-first-run --no-default-browser-check --disable-blink-features=AutomationControlled
-    
-    echo [✓] Chrome started
-    echo [i] Waiting for Chrome to initialize...
-    timeout /t 5 /nobreak >nul
-    
-    REM Verify Chrome is running with debug port
-    netstat -ano | findstr :9222 >nul 2>&1
-    if %errorlevel% neq 0 (
-        echo [ERROR] Chrome did not start with debug port!
-        echo Please check if port 9222 is available.
-        echo.
-        pause
-        exit /b 1
-    )
-    echo [✓] Chrome is ready (debug port 9222 active)
+    goto run_bot
 )
 
+echo [i] Chrome is not running with debug port
+echo [i] Starting Chrome with debug mode...
+echo.
+
+REM Close existing Chrome instances
+tasklist /FI "IMAGENAME eq chrome.exe" 2>NUL | find /I /N "chrome.exe">NUL
+if "%ERRORLEVEL%"=="0" (
+    echo [!] Closing existing Chrome instances...
+    taskkill /F /IM chrome.exe >nul 2>&1
+    echo [i] Waiting for Chrome to fully close...
+    timeout /t 3 /nobreak >nul
+    
+    REM Double check Chrome is closed
+    tasklist /FI "IMAGENAME eq chrome.exe" 2>NUL | find /I /N "chrome.exe">NUL
+    if "%ERRORLEVEL%"=="0" (
+        echo [!] Chrome is still running, trying again...
+        taskkill /F /IM chrome.exe /T >nul 2>&1
+        timeout /t 2 /nobreak >nul
+    )
+)
+
+REM Start Chrome
+echo [i] Starting Chrome...
+start "" "%CHROME_PATH%" --remote-debugging-port=9222
+
+echo [OK] Chrome started
+echo [i] Waiting for Chrome to initialize...
+timeout /t 5 /nobreak >nul
+
+REM Verify Chrome is running with debug port
+netstat -ano | findstr :9222 >nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Chrome did not start with debug port!
+    echo.
+    echo Possible causes:
+    echo   - Port 9222 is already in use
+    echo   - Chrome failed to start
+    echo.
+    echo Please try:
+    echo   1. Close all Chrome windows
+    echo   2. Run: open_chrome_windows.bat
+    echo   3. Then run this script again
+    echo.
+    pause
+    exit /b 1
+)
+echo [OK] Chrome is ready (debug port 9222 active)
+
+:run_bot
 echo.
 echo ────────────────────────────────────────────────────────────
 echo.
@@ -106,17 +96,17 @@ echo.
 
 REM Find and run the bot
 if exist "PokemonCenterBot.exe" (
-    echo [✓] Running PokemonCenterBot.exe
+    echo [OK] Running PokemonCenterBot.exe
     echo.
-    PokemonCenterBot.exe --profile Default
+    PokemonCenterBot.exe
 ) else if exist "dist\PokemonCenterBot.exe" (
-    echo [✓] Running dist\PokemonCenterBot.exe
+    echo [OK] Running dist\PokemonCenterBot.exe
     echo.
-    dist\PokemonCenterBot.exe --profile Default
+    dist\PokemonCenterBot.exe
 ) else if exist "pokemon_center_bot.py" (
-    echo [✓] Running from source (pokemon_center_bot.py)
+    echo [OK] Running from source (pokemon_center_bot.py)
     echo.
-    python pokemon_center_bot.py --profile Default
+    python pokemon_center_bot.py
 ) else (
     echo [ERROR] Pokemon Center Bot not found!
     echo.

@@ -211,13 +211,39 @@ def build_driver(headless: bool, profile: str = "Default", user_data_dir: Option
     try:
         if HAS_WEBDRIVER_MANAGER:
             LOGGER.info("Using webdriver-manager to get ChromeDriver...")
-            service = Service(ChromeDriverManager().install())
+            try:
+                # Get ChromeDriver path
+                driver_path = ChromeDriverManager().install()
+                LOGGER.info("ChromeDriver path: %s", driver_path)
+                
+                # On macOS, webdriver-manager might download the wrong file
+                # Check if it's actually the chromedriver binary
+                if platform.system() == "Darwin" and not driver_path.endswith("chromedriver"):
+                    LOGGER.warning("ChromeDriver path looks incorrect, searching for actual binary...")
+                    # Try to find the actual chromedriver binary
+                    driver_dir = Path(driver_path).parent
+                    possible_paths = [
+                        driver_dir / "chromedriver",
+                        driver_dir / "chromedriver-mac-arm64" / "chromedriver",
+                        driver_dir / "chromedriver-mac-x64" / "chromedriver",
+                    ]
+                    for possible_path in possible_paths:
+                        if possible_path.exists() and possible_path.is_file():
+                            driver_path = str(possible_path)
+                            LOGGER.info("Found actual ChromeDriver at: %s", driver_path)
+                            break
+                
+                service = Service(driver_path)
+            except Exception as e:
+                LOGGER.warning("webdriver-manager failed: %s", e)
+                LOGGER.info("Falling back to system ChromeDriver...")
+                service = Service()
         else:
             LOGGER.info("Using system ChromeDriver...")
             service = Service()
     except Exception as e:
-        LOGGER.warning("Failed to setup ChromeDriver with webdriver-manager: %s", e)
-        LOGGER.info("Falling back to system ChromeDriver...")
+        LOGGER.warning("Failed to setup ChromeDriver: %s", e)
+        LOGGER.info("Using default Service...")
         service = Service()
     
     try:
